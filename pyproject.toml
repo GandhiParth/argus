@@ -5,11 +5,16 @@ description = "All Things Trading"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "connectorx>=0.4.6",
     "ipykernel>=7.4.0",
     "isort>=9.0.2",
     "kiteconnect>=5.2.2",
+    "pandas>=3.1.1",
     "polars>=2.1.0",
+    "pyarrow>=26.0.1",
     "pyotp>=2.12.1",
     "ratelimit>=2.2.1",
     "ruff>=0.17.6",
+    "selenium>=4.53.0",
+    "sqlalchemy>=2.1.9",
 ]
