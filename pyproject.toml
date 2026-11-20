@@ -1,0 +1,15 @@
+[project]
+name = "argus"
+version = "0.1.0"
+description = "All Things Trading"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "ipykernel>=7.4.0",
+    "isort>=9.0.2",
+    "kiteconnect>=5.2.2",
+    "polars>=2.1.0",
+    "pyotp>=2.12.1",
+    "ratelimit>=2.2.1",
+    "ruff>=0.17.6",
+]
