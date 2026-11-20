@@ -1,3 +1,5 @@
+from typing import ClassVar
+
 from config.base import StorageConfig
 
 
@@ -10,7 +12,7 @@ class EditConfig:
 class KiteConfig(EditConfig):
     NAME = "KITE"
 
-    HISTORICAL_DATA_LIMIT_DAYS = {
+    HISTORICAL_DATA_LIMIT_DAYS: ClassVar[dict[str, int]] = {
         "minute": 30,
         "3minute": 90,
         "5minute": 90,
@@ -21,9 +23,14 @@ class KiteConfig(EditConfig):
         "day": 2000,
     }
 
-    API_RATE_LIMIT_SECONDS = {"quote": 1, "historical": 3, "order": 10, "others": 10}
+    API_RATE_LIMIT_SECONDS: ClassVar[dict[str, int]] = {
+        "quote": 1,
+        "historical": 3,
+        "order": 10,
+        "others": 10,
+    }
 
-    TICKER_LIMIT = {"max_tokens": 3000}
+    TICKER_LIMIT: ClassVar[dict[str, int]] = {"max_tokens": 3000}
 
     TYP_INDICES = "indices"
     TYP_STOCKS = "stocks"
