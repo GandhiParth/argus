@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 def gen_nse_base_population(
     data: pl.DataFrame | pl.LazyFrame,
-) -> list[pl.DataFrame, pl.DataFrame]:
+) -> pl.DataFrame:
 
     _max_timestamp = (
         data.lazy()
@@ -69,19 +69,30 @@ def gen_nse_base_population(
             pl.col("timestamp").len().alias("days_since_ipo"),
         )
         .filter(pl.col("avg_dollar_volume") >= NSEBasePopConfig.IPO_ADDV)
+        .with_columns(pl.lit(True).alias("ipo_pop_flag"))
         .sort("symbol")
         .collect()
     )
 
-    base_pop_df = df.filter(
-        (pl.col("timestamp") == _max_timestamp)
-        & (
-            pl.col(f"dollar_volume_sma_{NSEBasePopConfig.ADDV}")
-            >= NSEBasePopConfig.STOCKS_ADDV
+    base_pop_df = (
+        df.filter(
+            (pl.col("timestamp") == _max_timestamp)
+            & (
+                pl.col(f"dollar_volume_sma_{NSEBasePopConfig.ADDV}")
+                >= NSEBasePopConfig.STOCKS_ADDV
+            )
         )
-    ).collect()
+        .rename({f"dollar_volume_sma_{NSEBasePopConfig.ADDV}": "avg_dollar_volume"})
+        .select("symbol", "timestamp", "avg_dollar_volume")
+        .with_columns(
+            pl.lit(None).alias("days_since_ipo"), pl.lit(False).alias("ipo_pop_flag")
+        )
+        .collect()
+    )
 
     logger.info(f"Number of stocks in NSE Base Population: {base_pop_df.height}")
     logger.info(f"Number of stocks in NSE IPO Population: {ipo_stocks_df.height}")
 
-    return base_pop_df, ipo_stocks_df
+    res = ipo_stocks_df.vstack(base_pop_df).sort("symbol")
+
+    return res
