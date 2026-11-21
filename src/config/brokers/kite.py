@@ -36,6 +36,7 @@ class KiteConfig(EditConfig):
     TYP_STOCKS = "stocks"
 
     FNO_STOCKS_PATH = "fno_stocks.csv"
+    NSE_INSTRUMENTS_PATH = "nse_instruments.csv"
 
     @staticmethod
     def get_db_tbl(data_type: str, frequency: str, failed_tbl: bool):

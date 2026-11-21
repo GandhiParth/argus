@@ -4,10 +4,9 @@ from datetime import datetime, timedelta
 from typing import Literal
 
 import polars as pl
+from config.brokers import KiteConfig
 from kiteconnect import KiteConnect
 from ratelimit import limits, sleep_and_retry
-
-from config.brokers import KiteConfig
 
 
 class KiteHistorical:
