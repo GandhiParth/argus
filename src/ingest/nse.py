@@ -2,8 +2,7 @@ import logging
 
 import polars as pl
 
-from brokers.kite import KiteHistorical, KiteLogin, fetch_instruments
-from conf import KITE_CREDENTIALS_PATH
+from brokers.kite import KiteHistorical, fetch_instruments
 from config.base import StorageConfig
 from config.brokers import KiteConfig
 
@@ -56,13 +55,15 @@ def _nse_ins_pop_filter(file_path: str) -> pl.DataFrame:
     return df
 
 
-def fetch_nse_hist_data(start_date: str, end_date: str, frequency: str, save_path: str):
+def fetch_nse_hist_data(
+    kite_conn, start_date: str, end_date: str, frequency: str, save_path: str
+):
     """
     start_date: str in YYYY-MM-DD HH:MM:SS
     frequency
     """
 
-    kite_conn = KiteLogin(credentials_path=KITE_CREDENTIALS_PATH).auto_login()
+    # kite_conn = KiteLogin(credentials_path=KITE_CREDENTIALS_PATH).auto_login()
     ins_df = fetch_instruments(kite=kite_conn, exchange=kite_conn.EXCHANGE_NSE)
     logger.info(f"{ins_df.height} symbols fetched from Kite Instrument List")
     _ins_path = StorageConfig().store_root(save_path) / KiteConfig.NSE_INSTRUMENTS_PATH
@@ -93,3 +94,18 @@ def fetch_nse_hist_data(start_date: str, end_date: str, frequency: str, save_pat
         insert_table_name=_tbl_name,
         failed_table_name=_fl_tbl_name,
     )
+
+
+def fetch_nse_fno_stocks(kite_conn) -> pl.DataFrame:
+
+    ins_df = fetch_instruments(kite=kite_conn, exchange=kite_conn.EXCHANGE_NFO)
+    res = (
+        ins_df.filter(pl.col("instrument_type") == "FUT")
+        .select("name")
+        .unique()
+        .rename({"name": "symbol"})
+    )
+
+    logger.info(f"# of stocks in NSE FnO are: {res.height}")
+
+    return res

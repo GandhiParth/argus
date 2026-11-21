@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 def run_scanner(
     base_pop_data: pl.DataFrame,
     stock_ohlcv_data: pl.DataFrame,
+    fno_stocks: pl.DataFrame,
     end_date: datetime,
     scan_conf: ScannerConfig,
 ):
@@ -155,6 +156,7 @@ def run_scanner(
             | (pl.col("close_ema_21") <= pl.col("close_sma_50"))
         )
         & (pl.col("adr_pct_20") >= scan_conf.ADR_PCT)
+        & (pl.col("symbol").is_in(fno_stocks.get_column("symbol").to_list()))
     ).collect()
 
     logger.info(f"# of stocks in Long Filter : {long_filter_df.height}")
