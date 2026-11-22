@@ -9,6 +9,7 @@ from dateutil.relativedelta import relativedelta
 
 from config.compute import ScannerConfig
 from config.file_paths import FilePathConfig
+from config.ingest import NSEIndustryConfig
 
 logger = logging.getLogger(__name__)
 
@@ -168,6 +169,30 @@ def run_scanner(
     return long_filter_df, short_filter_df
 
 
+def _fetch_nse_industry_data() -> pl.DataFrame:
+
+    industry_tbl = NSEIndustryConfig.get_db_tbl(
+        tbl_name=NSEIndustryConfig.CLASSIFICATION_TABLE_ID, failed_tbl=False
+    )
+
+    query = f"""
+    SELECT *
+    FROM (
+        SELECT *,
+            ROW_NUMBER() OVER (
+                PARTITION BY symbol
+                ORDER BY timestamp DESC
+            ) AS rn
+        FROM {industry_tbl}
+    )
+    WHERE rn = 1;
+    """
+
+    industry_data = pl.read_database_uri(query=query, uri=NSEIndustryConfig.DB_CONN)
+
+    return industry_data
+
+
 def _agg_scan_results_helper(
     scan_data: pl.DataFrame | pl.LazyFrame,
     rs_data: pl.DataFrame | pl.LazyFrame,
@@ -177,6 +202,8 @@ def _agg_scan_results_helper(
 ) -> pl.DataFrame:
     scan_df = scan_data.lazy()
     rs_df = rs_df.lazy()
+
+    industry_data = _fetch_nse_industry_data().lazy()
 
     symbol_df = (
         pl.concat(
@@ -191,17 +218,22 @@ def _agg_scan_results_helper(
         .join(rs_data, on="symbol", how="left")
         .join(rs_df, on="symbol", how="left")
         .join(fno_data.lazy(), on="symbol", how="left")
+        .join(industry_data, how="left", on="symbol")
         .with_columns(cs.ends_with("_flag").fill_null(False))
         .select(
             [
                 "symbol",
                 "scan_type",
                 "scan_flag",
-                "rs_flag",
-                "fno_flag",
                 "rs",
                 "rs_prev_week",
                 "change_in_rank",
+                "rs_flag",
+                "fno_flag",
+                "macro_economic_sector",
+                "sector",
+                "industry",
+                "basic_industry",
             ]
         )
         .collect()
