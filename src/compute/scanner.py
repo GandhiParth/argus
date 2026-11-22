@@ -1,11 +1,14 @@
 import logging
 from datetime import datetime
 from functools import reduce
+from typing import Literal
 
 import polars as pl
+import polars.selectors as cs
 from dateutil.relativedelta import relativedelta
 
 from config.compute import ScannerConfig
+from config.file_paths import FilePathConfig
 
 logger = logging.getLogger(__name__)
 
@@ -163,3 +166,100 @@ def run_scanner(
     logger.info(f"# of stocks in Short Filter : {short_filter_df.height}")
 
     return long_filter_df, short_filter_df
+
+
+def _agg_scan_results_helper(
+    scan_data: pl.DataFrame | pl.LazyFrame,
+    rs_data: pl.DataFrame | pl.LazyFrame,
+    rs_df: pl.DataFrame | pl.LazyFrame,
+    fno_data: pl.DataFrame | pl.LazyFrame,
+    side: Literal["L", "S"],
+) -> pl.DataFrame:
+    scan_df = scan_data.lazy()
+    rs_df = rs_df.lazy()
+
+    symbol_df = (
+        pl.concat(
+            [scan_df.select("symbol"), rs_df.select("symbol")], how="vertical_relaxed"
+        )
+        .unique()
+        .with_columns(pl.lit(side).alias("scan_type"))
+    )
+
+    res = (
+        symbol_df.join(scan_df, on="symbol", how="left")
+        .join(rs_data, on="symbol", how="left")
+        .join(rs_df, on="symbol", how="left")
+        .join(fno_data.lazy(), on="symbol", how="left")
+        .with_columns(cs.ends_with("_flag").fill_null(False))
+        .select(
+            [
+                "symbol",
+                "scan_type",
+                "scan_flag",
+                "rs_flag",
+                "fno_flag",
+                "rs",
+                "rs_prev_week",
+                "change_in_rank",
+            ]
+        )
+        .collect()
+    )
+
+    return res
+
+
+def agg_scan_results(scan_conf: ScannerConfig, file_paths: FilePathConfig):
+
+    long_data = (
+        pl.scan_csv(file_paths.long_stocks)
+        .select("symbol")
+        .with_columns(pl.lit(True).alias("scan_flag"))
+    )
+    short_data = (
+        pl.scan_csv(file_paths.short_stocks)
+        .select("symbol")
+        .with_columns(pl.lit(True).alias("scan_flag"))
+    )
+    rs_data = pl.scan_csv(file_paths.relative_strength).select(
+        "symbol", "rs", "rs_prev_week", "change_in_rank"
+    )
+    fno_data = (
+        pl.scan_csv(file_paths.nse_fno_list)
+        .select("symbol")
+        .with_columns(pl.lit(True).alias("fno_flag"))
+    )
+
+    rs_long = (
+        rs_data.filter(pl.col("rs") >= scan_conf.LONG_RS)
+        .with_columns(pl.lit(True).alias("rs_flag"))
+        .select("symbol", "rs_flag")
+    )
+
+    rs_short = (
+        rs_data.filter(pl.col("rs") <= scan_conf.SHORT_RS)
+        .with_columns(pl.lit(True).alias("rs_flag"))
+        .select("symbol", "rs_flag")
+    )
+
+    long_df = _agg_scan_results_helper(
+        scan_data=long_data, rs_data=rs_data, rs_df=rs_long, fno_data=fno_data, side="L"
+    )
+
+    short_df = _agg_scan_results_helper(
+        scan_data=short_data,
+        rs_data=rs_data,
+        rs_df=rs_short,
+        fno_data=fno_data,
+        side="S",
+    )
+
+    logger.info(
+        f"Number of Stocks in agg scan for long: {long_df.height} for short scan: {short_df.height}"
+    )
+
+    long_df.write_csv(file_paths.agg_long)
+    short_df.write_csv(file_paths.agg_short)
+
+    return long_df, short_df

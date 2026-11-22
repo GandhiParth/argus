@@ -22,9 +22,15 @@ class ScannerConfig:
         63: 50,  # close today ≥ close 63 days ago * 1.22
         120: 100,
     }
+
     SMA_DAYS: ClassVar[list[int]] = [50]
     EMA_DAYS: ClassVar[list[int]] = [9, 21]
+
     ADR_DAY = 20
     ADR_PCT = 3
     ATR_DAY = 20  # for RS calculation
+
     LOOKBACK_MONTHS = 3
+
+    LONG_RS = 70
+    SHORT_RS = 40

@@ -3,8 +3,8 @@ import logging
 import polars as pl
 
 from brokers.kite import KiteHistorical, fetch_instruments
-from config.base import StorageConfig
 from config.brokers import KiteConfig
+from config.file_paths import FilePathConfig
 
 logger = logging.getLogger()
 
@@ -63,10 +63,12 @@ def fetch_nse_hist_data(
     frequency
     """
 
+    _file_path = FilePathConfig(end_date_str=save_path)
+
     # kite_conn = KiteLogin(credentials_path=KITE_CREDENTIALS_PATH).auto_login()
     ins_df = fetch_instruments(kite=kite_conn, exchange=kite_conn.EXCHANGE_NSE)
     logger.info(f"{ins_df.height} symbols fetched from Kite Instrument List")
-    _ins_path = StorageConfig().store_root(save_path) / KiteConfig.NSE_INSTRUMENTS_PATH
+    _ins_path = _file_path.nse_instruments_list
     ins_df.write_csv(_ins_path)
 
     df = _nse_ins_pop_filter(file_path=_ins_path)
@@ -96,7 +98,7 @@ def fetch_nse_hist_data(
     )
 
 
-def fetch_nse_fno_stocks(kite_conn) -> pl.DataFrame:
+def fetch_nse_fno_stocks(kite_conn, save_path: str) -> pl.DataFrame:
 
     ins_df = fetch_instruments(kite=kite_conn, exchange=kite_conn.EXCHANGE_NFO)
     res = (
@@ -107,5 +109,8 @@ def fetch_nse_fno_stocks(kite_conn) -> pl.DataFrame:
     )
 
     logger.info(f"# of stocks in NSE FnO are: {res.height}")
+
+    _file_path = FilePathConfig(end_date_str=save_path)
+    res.write_csv(_file_path.nse_fno_list)
 
     return res

@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from config.base import StorageConfig
+from config.brokers import KiteConfig
 
 
 @dataclass(frozen=True)
@@ -23,3 +24,24 @@ class FilePathConfig:
     @property
     def relative_strength(self) -> Path:
         return StorageConfig().store_root(self.end_date_str) / "relative_strength.csv"
+
+    @property
+    def nse_instruments_list(self) -> Path:
+        return (
+            StorageConfig().store_root(self.end_date_str)
+            / KiteConfig.NSE_INSTRUMENTS_PATH
+        )
+
+    @property
+    def nse_fno_list(self) -> Path:
+        return (
+            StorageConfig().store_root(self.end_date_str) / KiteConfig.FNO_STOCKS_PATH
+        )
+
+    @property
+    def agg_long(self) -> Path:
+        return StorageConfig().store_root(self.end_date_str) / "agg_long.csv"
+
+    @property
+    def agg_short(self) -> Path:
+        return StorageConfig().store_root(self.end_date_str) / "agg_short.csv"

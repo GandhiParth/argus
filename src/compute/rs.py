@@ -130,6 +130,7 @@ def cal_stocks_rs(
         .filter((pl.col("timestamp") == end_date) & pl.col("rss_score").is_not_null())
         .sort("rss_score", "rank", descending=[True, True])
         .with_columns(cs.float().round(4))
+        .rename({"rss_score": "rs", "rss_score_prev_week": "rs_prev_week"})
         .collect()
     )
 
