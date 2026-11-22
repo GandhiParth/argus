@@ -37,7 +37,6 @@ def _create_classification_table():
                 sector TEXT,
                 industry TEXT,
                 basic_industry TEXT,
-                market_cap_cr REAL,
                 PRIMARY KEY (symbol, timestamp)
             )
         """)
@@ -67,24 +66,6 @@ def _prepare_symbol_list(
     success_symbols = success_df.get_column("symbol").to_list()
 
     logger.info(f"# of Symbols data already fecthed for: {len(success_symbols)}")
-
-    ins_df = (
-        ins_df.lazy()
-        .filter(
-            (pl.col("segment") == "NSE")
-            & (pl.col("name").str.len_chars() > 0)
-            & (~pl.col("symbol").str.ends_with("INAV"))
-        )
-        .with_columns(
-            pl.col("symbol")
-            .str.split(by="-")
-            .list.get(index=1, null_on_oob=True)
-            .fill_null("EQ")
-            .alias("suffix")
-        )
-        .filter(pl.col("suffix").is_in(["EQ"]))
-        .collect()
-    )
 
     logger.info(f"# of Symbols to fetch data: {ins_df.shape[0]}")
 
@@ -195,11 +176,6 @@ def fetch_nse_industry_classification(
 
             time.sleep(random.uniform(0.5, 1.5))  # allow modal overlay to disappear
 
-            market_cap = driver.find_element(
-                By.XPATH,
-                "//div[normalize-space()='Total Market Cap (₹ Cr.)']/following-sibling::div[1]",
-            ).text
-
             data = {
                 "timestamp": fetch_date,
                 "symbol": symbol,
@@ -207,26 +183,9 @@ def fetch_nse_industry_classification(
                 "sector": sector,
                 "industry": industry,
                 "basic_industry": basic_industry,
-                "market_cap_cr": market_cap,
             }
 
-            df = (
-                pl.DataFrame([data])
-                .lazy()
-                .with_columns(
-                    pl.when(pl.col("market_cap_cr") == "-")
-                    .then(None)
-                    .otherwise(pl.col("market_cap_cr"))
-                    .alias("market_cap_cr")
-                )
-                .with_columns(
-                    pl.col("market_cap_cr")
-                    .str.replace_all(pattern=",", value="", literal=True)
-                    .cast(pl.Float64)
-                    .round(2)
-                )
-                .collect()
-            )
+            df = pl.DataFrame([data])
 
             df.write_database(
                 table_name=NSEIndustryConfig.get_db_tbl(
