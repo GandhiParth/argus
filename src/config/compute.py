@@ -26,4 +26,5 @@ class ScannerConfig:
     EMA_DAYS: ClassVar[list[int]] = [9, 21]
     ADR_DAY = 20
     ADR_PCT = 3
+    ATR_DAY = 20  # for RS calculation
     LOOKBACK_MONTHS = 3

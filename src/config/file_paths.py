@@ -19,3 +19,7 @@ class FilePathConfig:
     @property
     def short_stocks(self) -> Path:
         return StorageConfig().store_root(self.end_date_str) / "short_stocks.csv"
+
+    @property
+    def relative_strength(self) -> Path:
+        return StorageConfig().store_root(self.end_date_str) / "relative_strength.csv"
