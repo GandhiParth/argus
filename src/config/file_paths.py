@@ -45,3 +45,7 @@ class FilePathConfig:
     @property
     def agg_short(self) -> Path:
         return StorageConfig().store_root(self.end_date_str) / "agg_short.csv"
+
+    @property
+    def industry_data(self) -> Path:
+        return StorageConfig().store_root(self.end_date_str) / "industry_data.csv"

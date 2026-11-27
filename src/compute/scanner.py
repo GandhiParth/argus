@@ -9,7 +9,6 @@ from dateutil.relativedelta import relativedelta
 
 from config.compute import ScannerConfig
 from config.file_paths import FilePathConfig
-from config.ingest import NSEIndustryConfig
 
 logger = logging.getLogger(__name__)
 
@@ -169,41 +168,16 @@ def run_scanner(
     return long_filter_df, short_filter_df
 
 
-def _fetch_nse_industry_data() -> pl.DataFrame:
-
-    industry_tbl = NSEIndustryConfig.get_db_tbl(
-        tbl_name=NSEIndustryConfig.CLASSIFICATION_TABLE_ID, failed_tbl=False
-    )
-
-    query = f"""
-    SELECT *
-    FROM (
-        SELECT *,
-            ROW_NUMBER() OVER (
-                PARTITION BY symbol
-                ORDER BY timestamp DESC
-            ) AS rn
-        FROM {industry_tbl}
-    )
-    WHERE rn = 1;
-    """
-
-    industry_data = pl.read_database_uri(query=query, uri=NSEIndustryConfig.DB_CONN)
-
-    return industry_data
-
-
 def _agg_scan_results_helper(
     scan_data: pl.DataFrame | pl.LazyFrame,
     rs_data: pl.DataFrame | pl.LazyFrame,
     rs_df: pl.DataFrame | pl.LazyFrame,
     fno_data: pl.DataFrame | pl.LazyFrame,
+    industry_data: pl.DataFrame | pl.LazyFrame,
     side: Literal["L", "S"],
 ) -> pl.DataFrame:
     scan_df = scan_data.lazy()
     rs_df = rs_df.lazy()
-
-    industry_data = _fetch_nse_industry_data().lazy()
 
     symbol_df = (
         pl.concat(
@@ -218,7 +192,7 @@ def _agg_scan_results_helper(
         .join(rs_data, on="symbol", how="left")
         .join(rs_df, on="symbol", how="left")
         .join(fno_data.lazy(), on="symbol", how="left")
-        .join(industry_data, how="left", on="symbol")
+        .join(industry_data.lazy(), on="symbol", how="left")
         .with_columns(cs.ends_with("_flag").fill_null(False))
         .select(
             [
@@ -275,8 +249,15 @@ def agg_scan_results(scan_conf: ScannerConfig, file_paths: FilePathConfig):
         .select("symbol", "rs_flag")
     )
 
+    industry_data = pl.read_csv(file_paths.industry_data)
+
     long_df = _agg_scan_results_helper(
-        scan_data=long_data, rs_data=rs_data, rs_df=rs_long, fno_data=fno_data, side="L"
+        scan_data=long_data,
+        rs_data=rs_data,
+        rs_df=rs_long,
+        fno_data=fno_data,
+        industry_data=industry_data,
+        side="L",
     )
 
     short_df = _agg_scan_results_helper(
@@ -284,6 +265,7 @@ def agg_scan_results(scan_conf: ScannerConfig, file_paths: FilePathConfig):
         rs_data=rs_data,
         rs_df=rs_short,
         fno_data=fno_data,
+        industry_data=industry_data,
         side="S",
     )
 
