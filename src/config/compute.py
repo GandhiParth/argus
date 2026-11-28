@@ -23,7 +23,7 @@ class ScannerConfig:
         120: 100,
     }
 
-    SMA_DAYS: ClassVar[list[int]] = [50]
+    SMA_DAYS: ClassVar[list[int]] = [50, 200]
     EMA_DAYS: ClassVar[list[int]] = [9, 21]
 
     ADR_DAY = 20
@@ -34,3 +34,6 @@ class ScannerConfig:
 
     LONG_RS = 70
     SHORT_RS = 40
+
+    PCT_OFF_52W_HIGH = 30
+    CLOSE_SMA_200_SLOPE_PCT = -0.1

@@ -3,13 +3,22 @@ from datetime import datetime
 from functools import reduce
 from typing import Literal
 
+import numpy as np
 import polars as pl
 import polars.selectors as cs
-from config.compute import ScannerConfig
-from config.file_paths import FilePathConfig
 from dateutil.relativedelta import relativedelta
 
+from config.compute import ScannerConfig
+from config.file_paths import FilePathConfig
+
 logger = logging.getLogger(__name__)
+
+
+def _calculate_slope(arr: pl.Series) -> float:
+    y = arr.to_numpy()
+    x = np.arange(len(y))
+
+    return float(np.polyfit(x, y, 1)[0])
 
 
 def run_scanner(
@@ -63,6 +72,13 @@ def run_scanner(
             ]
             # Day Range
             + [(pl.col("high") / pl.col("low")).round(4).alias("day_range")]
+            # 52 week high
+            + [
+                pl.col("high")
+                .rolling_max(window_size=252)
+                .over(partition_by="symbol", order_by="timestamp", descending=False)
+                .alias("high_52w")
+            ]
         )
         .with_columns(
             # ADR calculation
@@ -94,6 +110,29 @@ def run_scanner(
                 .alias(f"pct_gain_prev_{i}")
                 for i in scan_conf.LOOKBACK_RETURN_PCT
             ]
+            # Pct off 52 week high
+            + [
+                ((pl.col("high_52w") - pl.col("close")) * 100 / pl.col("high_52w"))
+                .round(2)
+                .alias("pct_off_52w_high")
+            ]
+            # Slope of 200 SMA
+            + [
+                pl.col("close_sma_200")
+                .rolling_map(_calculate_slope, window_size=20, min_samples=20)
+                .round(2)
+                .over(
+                    partition_by="symbol",
+                    order_by="timestamp",
+                    descending=False,
+                )
+                .alias("close_sma_200_slope")
+            ]
+        )
+        .with_columns(
+            (pl.col("close_sma_200_slope") * 100 / pl.col("close_sma_200"))
+            .round(2)
+            .alias("close_sma_200_slope_pct")
         )
     )
 
@@ -164,7 +203,22 @@ def run_scanner(
     logger.info(f"# of stocks in Long Filter : {long_filter_df.height}")
     logger.info(f"# of stocks in Short Filter : {short_filter_df.height}")
 
-    return long_filter_df, short_filter_df
+    ind_df = (
+        ind_df.filter(pl.col("timestamp") == end_date)
+        .select(
+            [
+                "symbol",
+                "timestamp",
+                "high_52w",
+                "pct_off_52w_high",
+                "close_sma_200_slope",
+                "close_sma_200_slope_pct",
+            ]
+        )
+        .collect()
+    )
+
+    return long_filter_df, short_filter_df, ind_df
 
 
 def _agg_scan_results_helper(
@@ -173,10 +227,13 @@ def _agg_scan_results_helper(
     rs_df: pl.DataFrame | pl.LazyFrame,
     fno_data: pl.DataFrame | pl.LazyFrame,
     industry_data: pl.DataFrame | pl.LazyFrame,
+    indicator_data: pl.DataFrame | pl.LazyFrame,
     side: Literal["L", "S"],
 ) -> pl.DataFrame:
     scan_df = scan_data.lazy()
     rs_df = rs_df.lazy()
+
+    indicator_data = indicator_data.lazy()
 
     symbol_df = (
         pl.concat(
@@ -186,6 +243,23 @@ def _agg_scan_results_helper(
         .with_columns(pl.lit(side).alias("scan_type"))
     )
 
+    _select_cols = [
+        "symbol",
+        "scan_type",
+        "scan_flag",
+        "rs",
+        "rs_prev_week",
+        "change_in_rank",
+        "rs_flag",
+        "fno_flag",
+    ]
+    _ind_cols = [
+        "macro_economic_sector",
+        "sector",
+        "industry",
+        "basic_industry",
+    ]
+
     res = (
         symbol_df.join(scan_df, on="symbol", how="left")
         .join(rs_data, on="symbol", how="left")
@@ -193,24 +267,14 @@ def _agg_scan_results_helper(
         .join(fno_data.lazy(), on="symbol", how="left")
         .join(industry_data.lazy(), on="symbol", how="left")
         .with_columns(cs.ends_with("_flag").fill_null(False))
-        .select(
-            [
-                "symbol",
-                "scan_type",
-                "scan_flag",
-                "rs",
-                "rs_prev_week",
-                "change_in_rank",
-                "rs_flag",
-                "fno_flag",
-                "macro_economic_sector",
-                "sector",
-                "industry",
-                "basic_industry",
-            ]
-        )
-        .collect()
+        .select(_select_cols + _ind_cols)
     )
+    if side == "L":
+        res = res.join(indicator_data, on="symbol", how="left").select(
+            _select_cols + ["close_sma_200_flag", "52w_high_flag"] + _ind_cols
+        )
+
+    res = res.collect()
 
     return res
 
@@ -248,7 +312,37 @@ def agg_scan_results(scan_conf: ScannerConfig, file_paths: FilePathConfig):
         .select("symbol", "rs_flag")
     )
 
-    industry_data = pl.read_csv(file_paths.industry_data)
+    industry_data = pl.scan_csv(file_paths.industry_data)
+    indicator_data = (
+        pl.scan_csv(file_paths.indicator_data)
+        .select("symbol", "pct_off_52w_high", "close_sma_200_slope_pct")
+        .with_columns(
+            pl.when(
+                (
+                    pl.col("pct_off_52w_high").is_not_null()
+                    & (pl.col("pct_off_52w_high") <= scan_conf.PCT_OFF_52W_HIGH)
+                )
+                | (pl.col("pct_off_52w_high").is_null())
+            )
+            .then(True)
+            .otherwise(False)
+            .alias("52w_high_flag"),
+            pl.when(
+                (
+                    pl.col("close_sma_200_slope_pct").is_not_null()
+                    & (
+                        pl.col("close_sma_200_slope_pct")
+                        > scan_conf.CLOSE_SMA_200_SLOPE_PCT
+                    )
+                )
+                | (pl.col("close_sma_200_slope_pct").is_null())
+            )
+            .then(True)
+            .otherwise(False)
+            .alias("close_sma_200_flag"),
+        )
+        .select("symbol", "close_sma_200_flag", "52w_high_flag")
+    )
 
     long_df = _agg_scan_results_helper(
         scan_data=long_data,
@@ -256,6 +350,7 @@ def agg_scan_results(scan_conf: ScannerConfig, file_paths: FilePathConfig):
         rs_df=rs_long,
         fno_data=fno_data,
         industry_data=industry_data,
+        indicator_data=indicator_data,
         side="L",
     )
 
@@ -265,6 +360,7 @@ def agg_scan_results(scan_conf: ScannerConfig, file_paths: FilePathConfig):
         rs_df=rs_short,
         fno_data=fno_data,
         industry_data=industry_data,
+        indicator_data=indicator_data,
         side="S",
     )
 

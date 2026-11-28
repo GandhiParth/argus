@@ -1,8 +1,9 @@
 import logging
 
 import polars as pl
-from config.file_paths import FilePathConfig
 from nse import NSE
+
+from config.file_paths import FilePathConfig
 
 logger = logging.getLogger(__name__)
 

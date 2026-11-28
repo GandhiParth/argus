@@ -49,3 +49,7 @@ class FilePathConfig:
     @property
     def industry_data(self) -> Path:
         return StorageConfig().store_root(self.end_date_str) / "industry_data.csv"
+
+    @property
+    def indicator_data(self) -> Path:
+        return StorageConfig().store_root(self.end_date_str) / "indicator_data.csv"
