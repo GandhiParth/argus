@@ -5,10 +5,9 @@ from typing import Literal
 
 import polars as pl
 import polars.selectors as cs
-from dateutil.relativedelta import relativedelta
-
 from config.compute import ScannerConfig
 from config.file_paths import FilePathConfig
+from dateutil.relativedelta import relativedelta
 
 logger = logging.getLogger(__name__)
 

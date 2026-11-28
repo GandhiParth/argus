@@ -1,7 +1,6 @@
 import logging
 
 import polars as pl
-
 from config.compute import NSEBasePopConfig
 
 logger = logging.getLogger(__name__)

@@ -1,14 +1,13 @@
 import logging
 import time
 
+from brokers.exceptions import KiteError
 from kiteconnect import KiteConnect
 from pyotp import TOTP
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.firefox.options import Options as FirefoxOptions
-
-from brokers.exceptions import KiteError
 from utils import read_ini_file
 
 logger = logging.getLogger(__name__)

@@ -1,7 +1,6 @@
 import logging
 
 import polars as pl
-
 from brokers.kite import KiteHistorical, fetch_instruments
 from config.brokers import KiteConfig
 from config.file_paths import FilePathConfig

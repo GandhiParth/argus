@@ -3,7 +3,6 @@ from datetime import datetime
 
 import polars as pl
 import polars.selectors as cs
-
 from config.compute import ScannerConfig
 
 logger = logging.getLogger(__name__)
